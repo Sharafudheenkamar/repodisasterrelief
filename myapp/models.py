@@ -1,19 +1,15 @@
 from django.db import models
-
-from django.db import models
-from django.template.defaultfilters import default
-
 # Create your models here.
 
 class LoginTable(models.Model):
     username=models.CharField(max_length=100, blank=True,null=True)
     password=models.CharField(max_length=100, blank=True,null=True)
-    type=models.CharField(max_length=100, blank=True,null=True,default='college')
+    type=models.CharField(max_length=100, blank=True,null=True)
     email=models.CharField(max_length=100, blank=True,null=True)
 
 
 
-# Create your models here.
+# Create your models here
 
 
 
@@ -22,6 +18,7 @@ class Usermodel(models.Model):
     fullname = models.CharField(max_length=25, null=True, blank=True)
     Age = models.IntegerField(null=True, blank=True)
     Date_of_birth = models.DateField(null=True, blank=True)
+    Image = models.FileField(upload_to='profileimages',null=True,blank=True)
     Email = models.EmailField(null=True, blank=True)
     Father_name = models.CharField(max_length=20, null=True, blank=True)
     Mother_name = models.CharField(max_length=20, null=True, blank=True)
@@ -50,44 +47,8 @@ class Assigntask(models.Model):
     volunteerid=models.ForeignKey(Usermodel,on_delete=models.CASCADE,null=True,blank=True,related_name='volunteerid')
     task_name = models.CharField(max_length=100, null=True, blank=True)
     task_description = models.CharField(max_length=100, null=True, blank=True)
+    latitude = models.CharField(max_length=100,null=True,blank=True)
+    longitude = models.CharField(max_length=100,null=True,blank=True)
     task_status = models.CharField(max_length=100, null=True, blank=True)
     task_deadline = models.DateField(null=True, blank=True)
 
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .models import Assigntask, Usermodel
-from .serializers import AssigntaskSerializer
-
-class AssignTaskView(APIView):
-    def post(self, request):
-        """
-        Assigns a task to a volunteer.
-        Expected Input:
-        {
-            "userid": 1,   # Assigner's user ID
-            "volunteerid": 2,  # Volunteer's user ID
-            "task_name": "Distribute Food",
-            "task_description": "Deliver food packets to flood victims",
-            "task_status": "Pending",
-            "task_deadline": "2024-10-01"
-        }
-        """
-        serializer = AssigntaskSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Task assigned successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def get(self, request, volunteer_id=None):
-        """
-        Fetches all tasks for a specific volunteer (if `volunteer_id` is provided)
-        or all assigned tasks if no ID is given.
-        """
-        if volunteer_id:
-            tasks = Assigntask.objects.filter(volunteerid=volunteer_id)
-        else:
-            tasks = Assigntask.objects.all()
-            
-        serializer = AssigntaskSerializer(tasks, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)

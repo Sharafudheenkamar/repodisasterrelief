@@ -41,3 +41,10 @@ class UsermodelSerializer1(serializers.ModelSerializer):
         # Flatten LoginTable data to top level
         user_data = data.pop('user_pages', {})
         return {**user_data, **data}
+from rest_framework import serializers
+from .models import Assigntask
+
+class AssigntaskSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Assigntask
+        fields = '__all__'

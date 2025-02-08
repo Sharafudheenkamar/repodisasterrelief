@@ -53,57 +53,65 @@ from .models import LoginTable, Usermodel
 
 class UserRegistrationAPIView(APIView):
     def post(self, request, *args, **kwargs):
-        # First, Serialize login data (LoginTable)
-        skills_data = request.data.pop('skill', [])
+        # Extract and process request data
         data={}
-        data=request.data
-        if skills_data:
-            data['type']='volunteer'
-        elif request.data['Vehiclenumber']:
-            data['type']='ambulance'
-        else :
-            data['type']='user'
-        
+        data = request.data 
+        print(request.data) # Ensure data is mutable
+        skills_data = data.pop('skills', [])  # Extract skills safely
+
+        # Assign 'username' from 'Email'
+        data['username'] = data.get('Email', '')
+
+        # # Determine user type
+        # if skills_data:
+        #     data['type'] = 'volunteer'
+        # elif data.get('Vehiclenumber'):
+        #     data['type'] = 'ambulance'
+        # else:
+        #     data['type'] = 'user'
+
+        # Extract and handle the image if provided
+        image = data.get('Image', None)
+
+        # Serialize login data (LoginTable)
         serializer1 = LoginTableSerializer(data=data)
 
-        # Then, Serialize user data (Usermodel)
-        serializer = UserModelSerializer(data=request.data)
+        # Serialize user data (Usermodel)
+        serializer = UserModelSerializer(data=data)
 
         # Validate both serializers
-        if serializer.is_valid() and serializer1.is_valid():
-            # Save the login data first and associate the created instance
+        if serializer1.is_valid() and serializer.is_valid():
+            # Save login data first
             login_data = serializer1.save()
 
-            # Now, save the user data, associating it with the LoginTable (login_data)
-            # Use the 'user_pages' foreign key to link the Usermodel with LoginTable
+            # Save user data, linking it to login_data
             user_data = serializer.save(user_pages=login_data)
-            for skill in skills_data:
-                skill['user'] = user_data.id  # Associate user ID with skills
-                skill_serializer = SkillSerializer(data=skill)
+
+            # Save skills if provided
+            for skill_name in skills_data:
+                skill_serializer = SkillSerializer(data={'skill': skill_name, 'user': user_data.id})
                 if skill_serializer.is_valid():
-                    skill_serializer.save(user=user_data)
+                    skill_serializer.save()
 
-            # Send a confirmation email to the user
-            if skills_data:
-                subject = "Registration Successful"
-                message = f"Hello {request.data['fullname']},\n\nYou have successfully registered."
-                from_email = "no-reply@yourdomain.com"
-                recipient_list = [request.data['email']]
-            
-                send_mail(subject, message, from_email, recipient_list)
-            
+            # Send confirmation email if skills exist
+            # if skills_data:
+            #     subject = "Registration Successful"
+            #     message = f"Hello {data.get('fullname', 'User')},\n\nYou have successfully registered as a {data['type']}."
+            #     from_email = "no-reply@yourdomain.com"
+            #     recipient_list = [data.get('Email', '')]
 
+            #     send_mail(subject, message, from_email, recipient_list)
 
-            # Respond with a success message
+            # Return success response
             return Response({
                 "message": "User registered successfully. A confirmation email has been sent.",
                 "data": serializer.data
             }, status=status.HTTP_201_CREATED)
 
-        # Return error response if validation fails
+        # Return validation errors if any
         return Response({
             "message": "Validation failed",
-            "errors": serializer.errors
+            "errors": {**serializer.errors, **serializer1.errors}
         }, status=status.HTTP_400_BAD_REQUEST)
 # {
 #     "username": "john_doe",
@@ -172,7 +180,8 @@ class VolunteerUserListAPIView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             # Filter users where user_pages (LoginTable) has type='ambulance'
-            ambulance_users = Usermodel.objects.filter(user_pages__type='ambulance')
+            ambulance_users = Usermodel.objects.filter(user_pages__type='volunteer').all()
+            # print(ambulance_users)
             
             users_list = []
             for user in ambulance_users:
@@ -186,6 +195,7 @@ class VolunteerUserListAPIView(APIView):
                 # Combine login, user, and skill data into one response format
                 combined_data = {**login_data, **user_data, "skill": skill_data}
                 users_list.append(combined_data)
+                # print(users_list)
 
             return Response(users_list, status=status.HTTP_200_OK)
         
@@ -199,24 +209,44 @@ from .models import Assigntask, Usermodel
 from .serializers import AssigntaskSerializer
 
 class AssignTaskView(APIView):
-    def post(self, request):
-        """
-        Assigns a task to a volunteer.
-        Expected Input:
-        {
-            "userid": 1,   # Assigner's user ID
-            "volunteerid": 2,  # Volunteer's user ID
-            "task_name": "Distribute Food",
-            "task_description": "Deliver food packets to flood victims",
-            "task_status": "Pending",
-            "task_deadline": "2024-10-01"
-        }
-        """
-        serializer = AssigntaskSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Task assigned successfully", "data": serializer.data}, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        print("ddddddddddddd",request.data)
+        userid = data.get('userid')
+        task_name = data.get('task_name')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        volunteers = data.get('volunteers', [])
+        
+        # Get user who is assigning the task
+        try:
+            user = Usermodel.objects.get(user_pages__id=userid)
+        except Usermodel.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        assigned_tasks = []
+        for volunteer_data in volunteers:
+            volunteer_id = volunteer_data.get('id')
+            print("ddddddddddddddddddddn,mnv,mxnvmn",volunteer_id)
+            try:
+                volunteer = Usermodel.objects.get(id=volunteer_id)
+            except Usermodel.DoesNotExist:
+                return Response({'error': f'Volunteer with ID {volunteer_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+            print("22222222222222222")
+            # Create task assignment
+            task = Assigntask.objects.create(
+                userid=user,
+                volunteerid=volunteer,
+                task_name=task_name,
+                latitude=latitude,
+                longitude=longitude,
+                task_status='Pending'  # Default status
+            )
+            assigned_tasks.append(task)
+        print("dddddddfdsn,mxcvn,mnxcz,mxn,zmnoiaw9euqur09u")
+        serializer = AssigntaskSerializer(assigned_tasks, many=True)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 
     def get(self, request, volunteer_id=None):
         """
@@ -227,6 +257,31 @@ class AssignTaskView(APIView):
             tasks = Assigntask.objects.filter(volunteerid=volunteer_id)
         else:
             tasks = Assigntask.objects.all()
-            
+
         serializer = AssigntaskSerializer(tasks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+class LoginPageApi(APIView):
+    def post(self, request):
+        response_dict= {}
+        password = request.data.get("password")
+        print("Password ------------------> ",password)
+        username = request.data.get("username")
+        print("Username ------------------> ",username)
+        try:
+            userobj = LoginTable.objects.filter(username=username, password=password).first()
+            print(userobj)
+            response_dict = {
+                "login_id": userobj.id,
+                "user_type": userobj.type,
+                "status": "success",
+            }   
+            print("User details :--------------> ",response_dict)
+            return Response(response_dict, HTTP_200_OK)
+            # print("user_obj :-----------", user)
+        except LoginTable.DoesNotExist:
+            response_dict["message"] = "No account found for this username. Please signup."
+            return Response(response_dict, HTTP_200_OK)
+      
+        
+
+        
