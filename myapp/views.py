@@ -4,6 +4,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.status import *
+from django.db.models import Sum
 
 class LoginPage(APIView):
     def post(self, request):
@@ -39,8 +40,8 @@ class LoginPage(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Usermodel, LoginTable
-from .serializers import LoginTableSerializer, SkillSerializer, UserModelSerializer, UsermodelSerializer1
+from .models import Emergencyalerttable, Feedbacktable, Incidenttable, Requesttable, Resourcetable, Skill, Usermodel, LoginTable
+from .serializers import EmergencyalerttableSerializer, FeedbackSerializer, IncidenttableSerializer, LoginTableSerializer, RequestSerializer, RequesttableSerializer, ResourceSerializer, SkillSerializer, UserModelSerializer, UsermodelSerializer1, UsermodelSerializer2
 from django.core.mail import send_mail
 
 from django.core.mail import send_mail
@@ -94,13 +95,13 @@ class UserRegistrationAPIView(APIView):
                     skill_serializer.save()
 
             # Send confirmation email if skills exist
-            # if skills_data:
-            #     subject = "Registration Successful"
-            #     message = f"Hello {data.get('fullname', 'User')},\n\nYou have successfully registered as a {data['type']}."
-            #     from_email = "no-reply@yourdomain.com"
-            #     recipient_list = [data.get('Email', '')]
+            if skills_data:
+                subject = "Registration Successful"
+                message = f"Hello {data.get('fullname', 'User')},\n\nYou have successfully registered as a {data['type']}."
+                from_email = "no-reply@yourdomain.com"
+                recipient_list = [data.get('Email', '')]
 
-            #     send_mail(subject, message, from_email, recipient_list)
+                # send_mail(subject, message, from_email, recipient_list)
 
             # Return success response
             return Response({
@@ -138,19 +139,142 @@ class UserRegistrationAPIView(APIView):
 #         {"skill": "Django"}
 #     ]
 # }
+
+
+class CoordinatorRegistrationAPIView(APIView):
+    def get(self, request, *args, **kwargs):
+        try:
+            # Filter users where user_pages (LoginTable) has type='ambulance'
+            ambulance_users = Usermodel.objects.filter(user_pages__type='coordinator')
+            
+            users_list = []
+            for user in ambulance_users:
+                login_data = LoginTableSerializer(user.user_pages).data
+                user_data = UsermodelSerializer2(user).data
+                
+
+                
+                # Combine login, user, and skill data into one response format
+                combined_data = {**login_data, **user_data,}
+                users_list.append(combined_data)
+
+            return Response(users_list, status=status.HTTP_200_OK)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request, *args, **kwargs):
+        # Extract and process request data
+        data={}
+        data = request.data 
+        print(request.data) # Ensure data is mutable
+        # skills_data = data.pop('skills', [])  # Extract skills safely
+
+        # Assign 'username' from 'Email'
+        data['username'] = data.get('Email', '')
+
+        # # Determine user type
+        # if skills_data:
+        #     data['type'] = 'volunteer'
+        # elif data.get('Vehiclenumber'):
+        #     data['type'] = 'ambulance'
+        # else:
+        #     data['type'] = 'user'
+
+        # Extract and handle the image if provided
+        image = data.get('Image', None)
+
+        # Serialize login data (LoginTable)
+        serializer1 = LoginTableSerializer(data=data)
+
+        # Serialize user data (Usermodel)
+        serializer = UserModelSerializer(data=data)
+
+        # Validate both serializers
+        if serializer1.is_valid() and serializer.is_valid():
+            # Save login data first
+            login_data = serializer1.save()
+
+            # Save user data, linking it to login_data
+            user_data = serializer.save(user_pages=login_data)
+
+            # Save skills if provided
+
+            # # Send confirmation email if skills exist
+            # if skills_data:
+            #     subject = "Registration Successful"
+            #     message = f"Hello {data.get('fullname', 'User')},\n\nYou have successfully registered as a {data['type']}."
+            #     from_email = "no-reply@yourdomain.com"
+            #     recipient_list = [data.get('Email', '')]
+
+                # send_mail(subject, message, from_email, recipient_list)
+
+            # Return success response
+            return Response({
+                "message": "Coordinator registered successfully.",
+                "data": serializer.data
+            }, status=status.HTTP_201_CREATED)
+
+        # Return validation errors if any
+        return Response({
+            "message": "Validation failed",
+            "errors": {**serializer.errors, **serializer1.errors}
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from .models import Categorytable
+from .serializers import CategorytableSerializer
+from django.db.models import F 
+
+class CategorytableListCreateAPIView(APIView):
+    """Handles GET (list) and POST (create) requests for Categorytable"""
+    
+    def get(self, request):
+        categories = Categorytable.objects.exclude(category_name='amount') 
+        serializer = CategorytableSerializer(categories, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = CategorytableSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CategorytableDetailAPIView(APIView):
+    """Handles GET (retrieve), PUT (update), and DELETE requests for a single Categorytable instance"""
+
+    def get(self, request, pk):
+        category = get_object_or_404(Categorytable, pk=pk)
+        serializer = CategorytableSerializer(category)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        category = get_object_or_404(Categorytable, pk=pk)
+        serializer = CategorytableSerializer(category, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        category = get_object_or_404(Categorytable, pk=pk)
+        category.delete()
+        return Response({"message": "Deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
 class UserDetailView(APIView):
     def get(self, request, user_id):
         try:
-            user = Usermodel.objects.get(id=user_id)
+            user = Usermodel.objects.get(user_pages__id=user_id)
             serializer = UsermodelSerializer1(user)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Usermodel.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-from .models import LoginTable, Usermodel, Skill
-from .serializers import UserModelSerializer, LoginTableSerializer, SkillSerializer
 
 class AmbulanceUserListAPIView(APIView):
     def get(self, request, *args, **kwargs):
@@ -209,6 +333,15 @@ from .models import Assigntask, Usermodel
 from .serializers import AssigntaskSerializer
 
 class AssignTaskView(APIView):
+    # def get(self,request):
+    #     try:
+    #         # Fetch all tasks assigned to the user
+    #         tasks = Assigntask.objects.filter(volunteerid__user_pages__type='volunteer').all()
+    #         task_data = AssigntaskSerializer(tasks, many=True).data
+    #         print(task_data)
+    #         return Response(task_data, status=status.HTTP_200_OK)
+    #     except:
+    #         return Response({"error": "Failed to fetch tasks"}, status=status.HTTP_400_BAD_REQUEST)
     def post(self, request, *args, **kwargs):
         data = request.data
         print("ddddddddddddd",request.data)
@@ -254,12 +387,91 @@ class AssignTaskView(APIView):
         or all assigned tasks if no ID is given.
         """
         if volunteer_id:
-            tasks = Assigntask.objects.filter(volunteerid=volunteer_id)
+            print(volunteer_id)
+            c=Usermodel.objects.filter(user_pages__id=volunteer_id).first()
+            # print(c.id)
+            d=c.id
+
+            tasks = Assigntask.objects.filter(volunteerid__id=d)
+            # print(tasks).objects.filter()
         else:
             tasks = Assigntask.objects.all()
 
         serializer = AssigntaskSerializer(tasks, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    def put(self, request, volunteer_id):
+        """
+        Updates a specific assigned task based on `task_id`.
+        """
+        task = get_object_or_404(Assigntask, id=volunteer_id)
+        serializer = AssigntaskSerializer(task, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class AssignTaskViewAmbulance(APIView):
+    def get(self,request,id=None):
+        try:
+            # Fetch all tasks assigned to the user
+            tasks = Assigntask.objects.filter(volunteerid__user_pages__type='ambulance').all()
+            task_data = AssigntaskSerializer(tasks, many=True).data
+            print(task_data)
+            return Response(task_data, status=status.HTTP_200_OK)
+        except:
+            return Response({"error": "Failed to fetch tasks"}, status=status.HTTP_400_BAD_REQUEST)
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        print("ddddddddddddd",request.data)
+        userid = data.get('userid')
+        task_name = data.get('task_name')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        volunteers = data.get('volunteers', [])
+        
+        # Get user who is assigning the task
+        try:
+            user = Usermodel.objects.get(user_pages__id=userid)
+        except Usermodel.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        assigned_tasks = []
+        for volunteer_data in volunteers:
+            volunteer_id = volunteer_data.get('id')
+            print("ddddddddddddddddddddn,mnv,mxnvmn",volunteer_id)
+            try:
+                volunteer = Usermodel.objects.get(id=volunteer_id)
+            except Usermodel.DoesNotExist:
+                return Response({'error': f'Volunteer with ID {volunteer_id} not found'}, status=status.HTTP_404_NOT_FOUND)
+            print("22222222222222222")
+            # Create task assignment
+            task = Assigntask.objects.create(
+                userid=user,
+                volunteerid=volunteer,
+                task_name=task_name,
+                latitude=latitude,
+                longitude=longitude,
+                task_status='Pending'  # Default status
+            )
+            assigned_tasks.append(task)
+        print("dddddddfdsn,mxcvn,mnxcz,mxn,zmnoiaw9euqur09u")
+        serializer = AssigntaskSerializer(assigned_tasks, many=True)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+    # def get(self, request, volunteer_id=None):
+    #     """
+    #     Fetches all tasks for a specific volunteer (if `volunteer_id` is provided)
+    #     or all assigned tasks if no ID is given.
+    #     """
+    #     if volunteer_id:
+    #         tasks = Assigntask.objects.filter(volunteerid=volunteer_id)
+    #     else:
+    #         tasks = Assigntask.objects.all()
+
+    #     serializer = AssigntaskSerializer(tasks, many=True)
+    #     return Response(serializer.data, status=status.HTTP_200_OK)
 class LoginPageApi(APIView):
     def post(self, request):
         response_dict= {}
@@ -283,5 +495,237 @@ class LoginPageApi(APIView):
             return Response(response_dict, HTTP_200_OK)
       
         
+class IncidenttableAPIView(APIView):
+    def get(self, request, *args, **kwargs):
+        incidents = Incidenttable.objects.all()
+        serializer = IncidenttableSerializer(incidents, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
+    def post(self, request, *args, **kwargs):
+        print(request.data)
+        data={}
+        data=request.data
+        data['userid']=Usermodel.objects.get(user_pages__id=request.data['userid']).id
+        serializer = IncidenttableSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class IncidenttableDetailAPIView(APIView):
+    def get_object(self, pk):
+        try:
+            return Incidenttable.objects.get(pk=pk)
+        except Incidenttable.DoesNotExist:
+            return None
+
+    def get(self, request, pk, *args, **kwargs):
+        incident = self.get_object(pk)
+        if not incident:
+            return Response({"error": "Incident not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = IncidenttableSerializer(incident)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk, *args, **kwargs):
+        incident = self.get_object(pk)
+        if not incident:
+            return Response({"error": "Incident not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = IncidenttableSerializer(incident, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
+class EmergencyalerttableAPIView(APIView):
+    def get(self, request, *args, **kwargs):
+        incidents = Emergencyalerttable.objects.all()
+        serializer = EmergencyalerttableSerializer(incidents, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request, *args, **kwargs):
+        serializer = EmergencyalerttableSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmergencyalerttableDetailAPIView(APIView):
+    def get_object(self, pk):
+        try:
+            return Emergencyalerttable.objects.get(pk=pk)
+        except Emergencyalerttable.DoesNotExist:
+            return None
+
+    def get(self, request, pk, *args, **kwargs):
+        incident = self.get_object(pk)
+        if not incident:
+            return Response({"error": "Incident not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = EmergencyalerttableSerializer(incident)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk, *args, **kwargs):
+        incident = self.get_object(pk)
+        if not incident:
+            return Response({"error": "Incident not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = EmergencyalerttableSerializer(incident, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+class ResourceListCreateAPIView(APIView):
+    """Handles GET (list all resources) and POST (create a new resource)"""
+    
+    def get(self, request):
+        resources = Resourcetable.objects.all()
+        serializer = ResourceSerializer(resources, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        print(request.data)
+        serializer = ResourceSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class DonationResourceListCreateAPIView(APIView):
+    """Handles GET (list all resources) and POST (create a new resource)"""
+    
+    def get(self, request):
+        resources = Resourcetable.objects.all()
+        serializer = ResourceSerializer(resources, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        print(request.data)
+        serializer = ResourceSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    
+
+class ResourceDetailAPIView(APIView):
+    """Handles GET (retrieve single resource), PUT (update resource)"""
+
+    def get(self, request, pk):
+        resource = get_object_or_404(Resourcetable, pk=pk)
+        serializer = ResourceSerializer(resource)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        resource = get_object_or_404(Resourcetable, pk=pk)
+        print(request.data)
+        serializer = ResourceSerializer(resource, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+
+# Views
+class FeedbackListCreateView(APIView):
+    def get(self, request):
+        feedbacks = Feedbacktable.objects.all()
+        serializer = FeedbackSerializer(feedbacks, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        print(request.data)
+        data={}
+        data=request.data
+        c=Usermodel.objects.get(user_pages__id=request.data['userid'])
+        data['userid']=c.id
+        print("data",data)
+        serializer = FeedbackSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class FeedbackDetailView(APIView):
+    def get_object(self, pk):
+        try:
+            return Feedbacktable.objects.get(pk=pk)
+        except Feedbacktable.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        feedback = Feedbacktable.objects.filter(userid__user_pages__id=pk).all()
+        if feedback is None:
+            return Response({"error": "Feedback not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FeedbackSerializer(feedback,many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        feedback = self.get_object(pk)
+        if feedback is None:
+            return Response({"error": "Feedback not found"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = FeedbackSerializer(feedback, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class adminListView(APIView):
+    def get(self, request):
+
+        total_amount = Resourcetable.objects.aggregate(total_amount=Sum('res_amount'))['total_amount']
+        request_pending=Requesttable.objects.filter(request_status='pending').count()
+        requests=Requesttable.objects.filter(request_status='pending').all()
+        available_resources=Resourcetable.objects.all()
+        return Response({
+            
+            "total_res_amount": total_amount if total_amount else 0,
+            "request_pending": request_pending,
+            "resource_requests": RequestSerializer(requests, many=True).data,
+            "available_resources": ResourceSerializer(available_resources, many=True).data
+
+
+        })
+
+
+class RequesttableListCreateAPIView(APIView):
+    """
+    API View to GET all requests and POST a new request
+    """
+    def get(self, request):
+        requests = Requesttable.objects.all()
+        serializer = RequesttableSerializer(requests, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    def post(self, request):
+        serializer = RequesttableSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RequesttableDetailAPIView(APIView):
+    """
+    API View to GET, PUT, and DELETE a single request by ID
+    """
+    def get(self, request, pk):
+        request_instance = get_object_or_404(Requesttable, pk=pk)
+        serializer = RequesttableSerializer(request_instance)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        request_instance = get_object_or_404(Requesttable, pk=pk)
+        serializer = RequesttableSerializer(request_instance, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        request_instance = get_object_or_404(Requesttable, pk=pk)
+        request_instance.delete()
