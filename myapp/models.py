@@ -60,6 +60,8 @@ class Incidenttable(models.Model):
     incident_description = models.CharField(max_length=100, null=True, blank=True)
     incident_latitude = models.CharField(max_length=100,null=True,blank=True)
     incident_longitude = models.CharField(max_length=100,null=True,blank=True)
+    incident_reply=models.CharField(max_length=100,null=True,blank=True)
+    incident_image=models.FileField(upload_to='incidentimage',null=True,blank=True)
     reported_date= models.DateField(null=True, blank=True)
 
 
@@ -77,7 +79,11 @@ class Categorytable(models.Model):
     category_description = models.CharField(max_length=100, null=True, blank=True)
     category_status = models.CharField(max_length=100, null=True, blank=True)
 
-
+class Amounttable(models.Model):
+    category_id=models.ForeignKey(Categorytable,on_delete=models.CASCADE,null=True,blank=True)
+    amount_name = models.CharField(max_length=100, null=True, blank=True)
+    amount_description = models.CharField(max_length=100, null=True, blank=True)
+    amount_status = models.CharField(max_length=100, null=True, blank=True)
 
 class Resourcetable(models.Model):
     userid=models.ForeignKey(Usermodel,on_delete=models.CASCADE,null=True,blank=True,related_name='resource_assigner_id')
@@ -123,4 +129,10 @@ class Feedbacktable(models.Model):
     inc_id= models.ForeignKey(Incidenttable,on_delete=models.CASCADE,null=True,blank=True)
 
 
+class Complaint(models.Model):
+    userid=models.ForeignKey(Usermodel,on_delete=models.CASCADE,null=True,blank=True)
+    complaint_name = models.CharField(max_length=100, null=True, blank=True)
+    complaint_description = models.CharField(max_length=100, null=True, blank=True)
+    complaint_date=models.DateTimeField(auto_now_add=True,blank=True,null=True)
+    complaint_status=models.CharField(max_length=100,null=True,blank=True,default='pending')
 

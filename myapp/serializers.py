@@ -87,10 +87,14 @@ class EmergencyalerttableSerializer(serializers.ModelSerializer):
 
 class ResourceSerializer(serializers.ModelSerializer):
     cat_name = serializers.CharField(source='res_cat.category_name', read_only=True)
+    cat_id = serializers.CharField(source='res_cat.id', read_only=True)
     class Meta:
         model = Resourcetable
         fields = '__all__'
-
+class AmounttableSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Amounttable
+        fields = '__all__'
 class FeedbackSerializer(serializers.ModelSerializer):
 
     userid_name = serializers.CharField(source='userid.fullname', read_only=True)
@@ -106,6 +110,13 @@ class RequestSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class RequesttableSerializer(serializers.ModelSerializer):
+    category_name=serializers.CharField(source='resource.res_cat.category_name')
+    resource_name=serializers.CharField(source='resource.res_name')
+    class Meta:
+        model = Requesttable
+        fields = '__all__'
+
+class RequesttableSerializer1(serializers.ModelSerializer):
     class Meta:
         model = Requesttable
         fields = '__all__'

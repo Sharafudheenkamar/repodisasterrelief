@@ -40,8 +40,8 @@ class LoginPage(APIView):
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Emergencyalerttable, Feedbacktable, Incidenttable, Requesttable, Resourcetable, Skill, Usermodel, LoginTable
-from .serializers import EmergencyalerttableSerializer, FeedbackSerializer, IncidenttableSerializer, LoginTableSerializer, RequestSerializer, RequesttableSerializer, ResourceSerializer, SkillSerializer, UserModelSerializer, UsermodelSerializer1, UsermodelSerializer2
+from .models import Amounttable, Emergencyalerttable, Feedbacktable, Incidenttable, Requesttable, Resourcetable, Skill, Usermodel, LoginTable
+from .serializers import AmounttableSerializer, EmergencyalerttableSerializer, FeedbackSerializer, IncidenttableSerializer, LoginTableSerializer, RequestSerializer, RequesttableSerializer, RequesttableSerializer1, ResourceSerializer, SkillSerializer, UserModelSerializer, UsermodelSerializer1, UsermodelSerializer2
 from django.core.mail import send_mail
 
 from django.core.mail import send_mail
@@ -512,6 +512,12 @@ class IncidenttableAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class VolIncidenttableAPIView(APIView):
+    def get(self, request, *args, **kwargs):
+        incidents = Incidenttable.objects.filter(volunteerid__user_pages__type='volunteer').all()
+        print(incidents)
+        serializer = IncidenttableSerializer(incidents, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 class IncidenttableDetailAPIView(APIView):
     def get_object(self, pk):
@@ -593,6 +599,14 @@ class ResourceListCreateAPIView(APIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class viewresourcesallocatedvol(APIView):
+    """Handles GET (list all resources) and POST (create a new resource)"""
+    
+    def get(self, request ,volunteer_id):
+        resources = Resourcetable.objects.filter(volunteerid__user_pages__id=volunteer_id).all()
+        serializer = ResourceSerializer(resources, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 class DonationResourceListCreateAPIView(APIView):
     """Handles GET (list all resources) and POST (create a new resource)"""
     
@@ -627,7 +641,46 @@ class ResourceDetailAPIView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+class AmounttableAPIView(APIView):
+    def get(self, request, pk=None):
+        if pk:
+            try:
+                amount = Amounttable.objects.get(pk=pk)
+                serializer = AmounttableSerializer(amount)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            except Amounttable.DoesNotExist:
+                return Response({'error': 'Not Found'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            amounts = Amounttable.objects.all()
+            serializer = AmounttableSerializer(amounts, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = AmounttableSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, pk):
+        try:
+            amount = Amounttable.objects.get(pk=pk)
+        except Amounttable.DoesNotExist:
+            return Response({'error': 'Not Found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = AmounttableSerializer(amount, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        try:
+            amount = Amounttable.objects.get(pk=pk)
+            amount.delete()
+            return Response({'message': 'Deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        except Amounttable.DoesNotExist:
+            return Response({'error': 'Not Found'}, status=status.HTTP_404_NOT_FOUND)
 
 # Views
 class FeedbackListCreateView(APIView):
@@ -696,17 +749,54 @@ class RequesttableListCreateAPIView(APIView):
     """
     API View to GET all requests and POST a new request
     """
-    def get(self, request):
-        requests = Requesttable.objects.all()
+    def get(self, request,id=None):
+        requests = Requesttable.objects.filter(userid__user_pages__id=id).all()
         serializer = RequesttableSerializer(requests, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     def post(self, request):
-        serializer = RequesttableSerializer(data=request.data)
+        print(request.data)
+
+        data={}
+        data=request.data
+        data['userid']=Usermodel.objects.get(user_pages__id=request.data['userid']).id
+        serializer = RequesttableSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RequesttableDetailAPIView(APIView):
+    """
+    API View to GET, PUT, and DELETE a single request by ID
+    """
+    def get(self, request, pk):
+        request_instance = get_object_or_404(Requesttable, pk=pk)
+        serializer = RequesttableSerializer(request_instance)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        request_instance = get_object_or_404(Requesttable, pk=pk)
+        serializer = RequesttableSerializer(request_instance, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        request_instance = get_object_or_404(Requesttable, pk=pk)
+        request_instance.delete()
+
+
+class RequesttableDetailAPIView(APIView):
+    """
+    API View to GET, PUT, and DELETE a single request by ID
+    """
+    def get(self, request, pk):
+        request_instance = get_object_or_404(Requesttable, pk=pk)
+        serializer = RequesttableSerializer(request_instance)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class RequesttableDetailAPIView(APIView):
